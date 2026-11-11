@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriTrack - Calorie & Macro Monitor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbars for clean UI */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans antialiased flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-500 text-white p-2 rounded-xl shadow-md shadow-emerald-500/20">
+                    <i data-lucide="activity" class="w-6 h-6"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900">Nutri<span class="text-emerald-600">Track</span></h1>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Date Picker Controls -->
+                <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                    <button id="prev-date-btn" class="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-600 transition" title="Previous Day">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <input type="date" id="current-date-picker" class="bg-transparent text-sm font-semibold px-2 focus:outline-none text-slate-700 cursor-pointer">
+                    <button id="next-date-btn" class="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-600 transition" title="Next Day">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <!-- Data Backup / Export Button -->
+                <button id="export-data-btn" class="p-2 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 transition" title="Backup / Export Data (JSON)">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                </button>
+                <!-- Data Restore / Import Button -->
+                <label for="import-file-input" class="p-2 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 transition cursor-pointer" title="Restore / Import Data (JSON)">
+                    <i data-lucide="upload" class="w-5 h-5"></i>
+                    <input type="file" id="import-file-input" accept=".json" class="hidden">
+                </label>
+                <!-- Settings Trigger Button -->
+                <button id="open-settings-btn" class="p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition" title="Target Settings">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Overview Row: Calorie Radial Progress + Stat Cards + Macro Breakdown -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Card 1: Calorie Ring & Main Overview (5 cols) -->
+            <div class="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-semibold text-slate-900">Daily Calorie Balance</h2>
+                    <span id="date-display-badge" class="text-xs font-medium bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200">Today</span>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-around gap-6 my-2">
+                    <!-- Donut Progress Ring -->
+                    <div class="relative w-44 h-44 flex items-center justify-center">
+                        <canvas id="calorieDonutChart" width="176" height="176"></canvas>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                            <span id="remaining-calories-val" class="text-3xl font-extrabold text-slate-900">0</span>
+                            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Remaining</span>
+                        </div>
+                    </div>
+
+                    <!-- Breakdown Numbers -->
+                    <div class="space-y-3 w-full sm:w-auto">
+                        <div class="flex items-center gap-3">
+                            <div class="w-3 h-3 rounded-full bg-slate-200"></div>
+                            <div>
+                                <p class="text-xs text-slate-500">Goal Target</p>
+                                <p class="text-base font-bold text-slate-800" id="stat-goal-calories">2,000 kcal</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <div>
+                                <p class="text-xs text-slate-500">Food Intake</p>
+                                <p class="text-base font-bold text-emerald-600" id="stat-food-calories">0 kcal</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                            <div>
+                                <p class="text-xs text-slate-500">Exercise Burned</p>
+                                <p class="text-base font-bold text-amber-600" id="stat-burned-calories">0 kcal</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs text-slate-500">
+                    <span>Net Intake: <strong id="net-calories-val" class="text-slate-800 font-semibold">0</strong> kcal</span>
+                    <span id="calorie-status-msg" class="font-medium text-emerald-600">On Track</span>
+                </div>
+            </div>
+
+            <!-- Card 2: Macronutrient Breakdown Bars (7 cols) -->
+            <div class="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-900">Macronutrient Targets</h2>
+                        <p class="text-xs text-slate-500">Track your daily balance of Protein, Carbs & Fats</p>
+                    </div>
+                    <button id="quick-macro-edit" class="text-xs text-emerald-600 font-medium hover:underline flex items-center gap-1">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Adjust
+                    </button>
+                </div>
+
+                <div class="space-y-5 my-auto">
+                    <!-- Protein Bar -->
+                    <div>
+                        <div class="flex justify-between items-center text-sm mb-1.5">
+                            <span class="font-medium text-slate-700 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Protein
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                <strong id="protein-current" class="text-slate-800">0</strong> / <span id="protein-target">150</span>g
+                                (<span id="protein-percent">0</span>%)
+                            </span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div id="protein-progress-bar" class="bg-indigo-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Carbs Bar -->
+                    <div>
+                        <div class="flex justify-between items-center text-sm mb-1.5">
+                            <span class="font-medium text-slate-700 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> Carbohydrates
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                <strong id="carbs-current" class="text-slate-800">0</strong> / <span id="carbs-target">225</span>g
+                                (<span id="carbs-percent">0</span>%)
+                            </span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div id="carbs-progress-bar" class="bg-cyan-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Fats Bar -->
+                    <div>
+                        <div class="flex justify-between items-center text-sm mb-1.5">
+                            <span class="font-medium text-slate-700 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Fats
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                <strong id="fats-current" class="text-slate-800">0</strong> / <span id="fats-target">65</span>g
+                                (<span id="fats-percent">0</span>%)
+                            </span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div id="fats-progress-bar" class="bg-rose-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats Footer -->
+                <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2 text-center">
+                    <div class="p-2 rounded-xl bg-slate-50">
+                        <span class="block text-xs text-slate-400 font-medium">Protein Cal</span>
+                        <span id="protein-kcal" class="text-sm font-bold text-slate-700">0 kcal</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50">
+                        <span class="block text-xs text-slate-400 font-medium">Carb Cal</span>
+                        <span id="carbs-kcal" class="text-sm font-bold text-slate-700">0 kcal</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50">
+                        <span class="block text-xs text-slate-400 font-medium">Fat Cal</span>
+                        <span id="fats-kcal" class="text-sm font-bold text-slate-700">0 kcal</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Workspace: Add Logs & Detailed Diary -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left Panel: Logging Forms & Quick Adder (5 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+
+                <!-- Log Tabs (Food vs Exercise) -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+                    <div class="flex border-b border-slate-100 mb-5">
+                        <button id="tab-btn-food" class="flex-1 pb-3 text-sm font-semibold text-emerald-600 border-b-2 border-emerald-600 flex items-center justify-center gap-2">
+                            <i data-lucide="utensils" class="w-4 h-4"></i> Log Food
+                        </button>
+                        <button id="tab-btn-exercise" class="flex-1 pb-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-600 flex items-center justify-center gap-2">
+                            <i data-lucide="flame" class="w-4 h-4"></i> Log Exercise
+                        </button>
+                    </div>
+
+                    <!-- Log Food Form -->
+                    <form id="food-log-form" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Food / Item Name</label>
+                            <input type="text" id="food-name" required placeholder="e.g. Oatmeal with Berries" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Calories (kcal)</label>
+                                <input type="number" id="food-calories" required min="0" placeholder="350" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Meal Category</label>
+                                <select id="food-category" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm bg-white">
+                                    <option value="Breakfast">Breakfast</option>
+                                    <option value="Lunch">Lunch</option>
+                                    <option value="Dinner">Dinner</option>
+                                    <option value="Snacks">Snacks</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Optional Macro Inputs -->
+                        <div class="grid grid-cols-3 gap-2 pt-1">
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-500 mb-1">Protein (g)</label>
+                                <input type="number" id="food-protein" min="0" placeholder="0" class="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-500 mb-1">Carbs (g)</label>
+                                <input type="number" id="food-carbs" min="0" placeholder="0" class="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-500 mb-1">Fats (g)</label>
+                                <input type="number" id="food-fats" min="0" placeholder="0" class="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-500">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl transition shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-sm mt-2">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Add to Food Diary
+                        </button>
+                    </form>
+
+                    <!-- Log Exercise Form (Hidden by default) -->
+                    <form id="exercise-log-form" class="space-y-4 hidden">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Activity / Exercise Name</label>
+                            <input type="text" id="exercise-name" required placeholder="e.g. Evening Jogging" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Calories Burned</label>
+                                <input type="number" id="exercise-calories" required min="1" placeholder="250" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Duration (mins)</label>
+                                <input type="number" id="exercise-duration" placeholder="30" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-2.5 rounded-xl transition shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-sm">
+                            <i data-lucide="flame" class="w-4 h-4"></i> Deduct Burned Calories
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Quick Add Preset Library Card -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                        <span>Quick-Add Preset Foods</span>
+                        <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i>
+                    </h3>
+                    <div id="quick-preset-container" class="flex flex-wrap gap-2">
+                        <!-- JavaScript dynamic presets -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel: Daily Food & Activity Diary (7 cols) -->
+            <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm flex flex-col justify-between">
+
+                <div>
+                    <div class="flex items-center justify-between mb-6 pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="book-open" class="w-5 h-5 text-emerald-600"></i>
+                            <h2 class="text-base font-semibold text-slate-900">Daily Log Diary</h2>
+                        </div>
+                        <span id="total-log-count-badge" class="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">0 entries</span>
+                    </div>
+
+                    <!-- Diary Categories -->
+                    <div class="space-y-6">
+
+                        <!-- Breakfast Section -->
+                        <div class="diary-section" data-category="Breakfast">
+                            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <i data-lucide="coffee" class="w-3.5 h-3.5 text-amber-500"></i> Breakfast
+                                </h3>
+                                <span class="category-subtotal text-xs font-medium text-slate-500">0 kcal</span>
+                            </div>
+                            <div class="diary-list space-y-2" id="list-Breakfast">
+                                <p class="text-xs text-slate-400 italic py-1">No items logged for Breakfast.</p>
+                            </div>
+                        </div>
+
+                        <!-- Lunch Section -->
+                        <div class="diary-section" data-category="Lunch">
+                            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i> Lunch
+                                </h3>
+                                <span class="category-subtotal text-xs font-medium text-slate-500">0 kcal</span>
+                            </div>
+                            <div class="diary-list space-y-2" id="list-Lunch">
+                                <p class="text-xs text-slate-400 italic py-1">No items logged for Lunch.</p>
+                            </div>
+                        </div>
+
+                        <!-- Dinner Section -->
+                        <div class="diary-section" data-category="Dinner">
+                            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-500"></i> Dinner
+                                </h3>
+                                <span class="category-subtotal text-xs font-medium text-slate-500">0 kcal</span>
+                            </div>
+                            <div class="diary-list space-y-2" id="list-Dinner">
+                                <p class="text-xs text-slate-400 italic py-1">No items logged for Dinner.</p>
+                            </div>
+                        </div>
+
+                        <!-- Snacks Section -->
+                        <div class="diary-section" data-category="Snacks">
+                            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <i data-lucide="apple" class="w-3.5 h-3.5 text-rose-500"></i> Snacks
+                                </h3>
+                                <span class="category-subtotal text-xs font-medium text-slate-500">0 kcal</span>
+                            </div>
+                            <div class="diary-list space-y-2" id="list-Snacks">
+                                <p class="text-xs text-slate-400 italic py-1">No snacks logged.</p>
+                            </div>
+                        </div>
+
+                        <!-- Exercises Section -->
+                        <div class="diary-section" data-category="Exercise">
+                            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-500"></i> Physical Activities
+                                </h3>
+                                <span class="category-subtotal text-xs font-medium text-amber-600">-0 kcal</span>
+                            </div>
+                            <div class="diary-list space-y-2" id="list-Exercise">
+                                <p class="text-xs text-slate-400 italic py-1">No exercises recorded.</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Footer info & Clear button -->
+                <div class="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                    <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Data saved locally</span>
+                    <button id="clear-day-btn" class="text-rose-500 hover:text-rose-700 font-medium hover:underline flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Reset Day Log
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Bottom Section: Analytics & Weekly Trends -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-base font-semibold text-slate-900">7-Day Calorie & Macro Analytics</h2>
+                    <p class="text-xs text-slate-500">Compare your daily calorie intake vs target over the past week</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 text-xs text-slate-500">
+                        <span class="w-3 h-3 bg-emerald-500 rounded-sm inline-block"></span> Calorie Intake
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-xs text-slate-500 ml-2">
+                        <span class="w-3 h-0.5 bg-slate-400 inline-block"></span> Daily Goal
+                    </span>
+                </div>
+            </div>
+
+            <div class="h-64 w-full relative">
+                <canvas id="weeklyTrendsChart"></canvas>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Goals & Targets Settings -->
+    <div id="settings-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 transform scale-95 transition-transform duration-200" id="settings-modal-card">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-5 h-5 text-emerald-600"></i> Set Nutrition Targets
+                </h3>
+                <button id="close-settings-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="settings-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Daily Calorie Target (kcal)</label>
+                    <input type="number" id="target-calories-input" required min="500" max="10000" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm">
+                </div>
+
+                <div class="pt-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Macro Ratio Targets (Grams)</h4>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Protein (g)</label>
+                            <input type="number" id="target-protein-input" required min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Carbs (g)</label>
+                            <input type="number" id="target-carbs-input" required min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Fats (g)</label>
+                            <input type="number" id="target-fats-input" required min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100 flex items-start gap-2.5 text-xs text-emerald-800 mt-2">
+                    <i data-lucide="info" class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"></i>
+                    <span>Adjusting targets updates your daily progress rings and nutrient recommendation percentages.</span>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" id="cancel-settings-btn" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm shadow-sm transition">
+                        Save Goals
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Element -->
+    <div id="toast-notification" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <i data-lucide="check-circle" id="toast-icon" class="w-5 h-5 text-emerald-400"></i>
+        <span id="toast-message" class="text-sm font-medium">Log updated successfully!</span>
+    </div>
+
+    <!-- Application JavaScript Code -->
+    <script>
+        // --- PRESET QUICK FOOD DATABASE ---
+        const COMMON_PRESETS = [
+            { name: 'Oatmeal (1 cup)', calories: 150, protein: 6, carbs: 27, fats: 3, category: 'Breakfast' },
+            { name: 'Egg (Large)', calories: 78, protein: 6, carbs: 0.6, fats: 5, category: 'Breakfast' },
+            { name: 'Grilled Chicken (150g)', calories: 245, protein: 46, carbs: 0, fats: 5, category: 'Lunch' },
+            { name: 'White Rice (1 cup)', calories: 205, protein: 4.2, carbs: 45, fats: 0.4, category: 'Lunch' },
+            { name: 'Salmon Filet (150g)', calories: 310, protein: 34, carbs: 0, fats: 18, category: 'Dinner' },
+            { name: 'Banana (Medium)', calories: 105, protein: 1.3, carbs: 27, fats: 0.3, category: 'Snacks' },
+            { name: 'Greek Yogurt (170g)', calories: 100, protein: 17, carbs: 6, fats: 0.7, category: 'Snacks' },
+            { name: 'Protein Shake', calories: 180, protein: 25, carbs: 4, fats: 2.5, category: 'Snacks' },
+            { name: 'Avocado (Half)', calories: 160, protein: 2, carbs: 8.5, fats: 15, category: 'Breakfast' }
+        ];
+
+        // --- APP STATE MANAGEMENT ---
+        const APP_KEYS = {
+            TARGETS: 'nutritrack_targets_v1',
+            LOGS_PREFIX: 'nutritrack_log_'
+        };
+
+        let currentSelectedDate = getTodayFormattedDate();
+        let currentTargets = {
+            calories: 2000,
+            protein: 150,
+            carbs: 225,
+            fats: 65
+        };
+
+        // Donut & Bar Charts references
+        let calorieChart = null;
+        let weeklyChart = null;
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            lucide.createIcons();
+            initDatePicker();
+            loadTargets();
+            renderQuickPresets();
+            setupEventListeners();
+            initCalorieChart();
+            loadDailyLog(currentSelectedDate);
+            initWeeklyTrendsChart();
+        };
+
+        // Date helper format YYYY-MM-DD
+        function getTodayFormattedDate() {
+            const d = new Date();
+            return d.toISOString().split('T')[0];
+        }
+
+        function initDatePicker() {
+            const picker = document.getElementById('current-date-picker');
+            picker.value = currentSelectedDate;
+            updateDateBadge(currentSelectedDate);
+        }
+
+        function updateDateBadge(dateStr) {
+            const todayStr = getTodayFormattedDate();
+            const badge = document.getElementById('date-display-badge');
+            if (dateStr === todayStr) {
+                badge.innerText = 'Today';
+                badge.className = 'text-xs font-medium bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200';
+            } else {
+                badge.innerText = dateStr;
+                badge.className = 'text-xs font-medium bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200';
+            }
+        }
+
+        // --- LOCAL STORAGE HELPERS ---
+        function loadTargets() {
+            try {
+                const saved = localStorage.getItem(APP_KEYS.TARGETS);
+                if (saved) {
+                    currentTargets = { ...currentTargets, ...JSON.parse(saved) };
+                }
+            } catch (e) {
+                console.error("Failed to parse targets", e);
+            }
+            updateTargetsDisplay();
+        }
+
+        function saveTargets() {
+            localStorage.setItem(APP_KEYS.TARGETS, JSON.stringify(currentTargets));
+            updateTargetsDisplay();
+            loadDailyLog(currentSelectedDate); // Refresh calculation
+        }
+
+        function updateTargetsDisplay() {
+            document.getElementById('stat-goal-calories').innerText = `${currentTargets.calories.toLocaleString()} kcal`;
+            document.getElementById('protein-target').innerText = currentTargets.protein;
+            document.getElementById('carbs-target').innerText = currentTargets.carbs;
+            document.getElementById('fats-target').innerText = currentTargets.fats;
+
+            // Fill settings modal inputs
+            document.getElementById('target-calories-input').value = currentTargets.calories;
+            document.getElementById('target-protein-input').value = currentTargets.protein;
+            document.getElementById('target-carbs-input').value = currentTargets.carbs;
+            document.getElementById('target-fats-input').value = currentTargets.fats;
+        }
+
+        function getLogForDate(dateStr) {
+            try {
+                const raw = localStorage.getItem(APP_KEYS.LOGS_PREFIX + dateStr);
+                return raw ? JSON.parse(raw) : { foods: [], exercises: [] };
+            } catch (e) {
+                return { foods: [], exercises: [] };
+            }
+        }
+
+        function saveLogForDate(dateStr, logData) {
+            localStorage.setItem(APP_KEYS.LOGS_PREFIX + dateStr, JSON.stringify(logData));
+        }
+
+        // --- UI RENDERERS & LOGIC ---
+        function renderQuickPresets() {
+            const container = document.getElementById('quick-preset-container');
+            container.innerHTML = '';
+            COMMON_PRESETS.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = 'text-xs bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 transition font-medium flex items-center gap-1.5';
+                btn.innerHTML = `<span>${item.name}</span> <span class="text-slate-400 font-normal">(${item.calories}k)</span>`;
+                btn.onclick = () => quickAddFood(item);
+                container.appendChild(btn);
+            });
+        }
+
+        function quickAddFood(item) {
+            const currentLog = getLogForDate(currentSelectedDate);
+            const foodEntry = {
+                id: Date.now().toString(),
+                name: item.name,
+                calories: Number(item.calories),
+                protein: Number(item.protein || 0),
+                carbs: Number(item.carbs || 0),
+                fats: Number(item.fats || 0),
+                category: item.category || 'Snacks',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            currentLog.foods.push(foodEntry);
+            saveLogForDate(currentSelectedDate, currentLog);
+            loadDailyLog(currentSelectedDate);
+            showToast(`Added ${item.name} (${item.calories} kcal)`);
+        }
+
+        function loadDailyLog(dateStr) {
+            const log = getLogForDate(dateStr);
+            
+            // Summaries calculation
+            let totalFoodKcal = 0;
+            let totalProtein = 0;
+            let totalCarbs = 0;
+            let totalFats = 0;
+
+            let catTotals = {
+                Breakfast: 0,
+                Lunch: 0,
+                Dinner: 0,
+                Snacks: 0,
+                Exercise: 0
+            };
+
+            // Clear visual list contents
+            ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Exercise'].forEach(cat => {
+                document.getElementById(`list-${cat}`).innerHTML = '';
+            });
+
+            // Populate Foods
+            log.foods.forEach(food => {
+                totalFoodKcal += Number(food.calories || 0);
+                totalProtein += Number(food.protein || 0);
+                totalCarbs += Number(food.carbs || 0);
+                totalFats += Number(food.fats || 0);
+
+                const catKey = food.category || 'Snacks';
+                catTotals[catKey] = (catTotals[catKey] || 0) + Number(food.calories);
+
+                const listEl = document.getElementById(`list-${catKey}`);
+                listEl.appendChild(createEntryRowHTML(food, 'food'));
+            });
+
+            // Populate Exercises
+            let totalBurnedKcal = 0;
+            log.exercises.forEach(ex => {
+                totalBurnedKcal += Number(ex.calories || 0);
+                catTotals.Exercise += Number(ex.calories);
+
+                const listEl = document.getElementById('list-Exercise');
+                listEl.appendChild(createEntryRowHTML(ex, 'exercise'));
+            });
+
+            // Update empty state messages if section has no items
+            ['Breakfast', 'Lunch', 'Dinner', 'Snacks'].forEach(cat => {
+                const listEl = document.getElementById(`list-${cat}`);
+                if (!listEl.children.length) {
+                    listEl.innerHTML = `<p class="text-xs text-slate-400 italic py-1">No items logged for ${cat}.</p>`;
+                }
+            });
+            const exListEl = document.getElementById('list-Exercise');
+            if (!exListEl.children.length) {
+                exListEl.innerHTML = `<p class="text-xs text-slate-400 italic py-1">No activities recorded.</p>`;
+            }
+
+            // Update subtotal texts
+            Object.keys(catTotals).forEach(cat => {
+                const sec = document.querySelector(`.diary-section[data-category="${cat}"] .category-subtotal`);
+                if (sec) {
+                    if (cat === 'Exercise') {
+                        sec.innerText = `-${catTotals[cat]} kcal`;
+                    } else {
+                        sec.innerText = `${catTotals[cat]} kcal`;
+                    }
+                }
+            });
+
+            // Net & Status Math
+            const netCalories = totalFoodKcal - totalBurnedKcal;
+            const remainingCalories = currentTargets.calories - netCalories;
+
+            // DOM Updates for Header Card
+            document.getElementById('stat-food-calories').innerText = `${totalFoodKcal.toLocaleString()} kcal`;
+            document.getElementById('stat-burned-calories').innerText = `${totalBurnedKcal.toLocaleString()} kcal`;
+            document.getElementById('remaining-calories-val').innerText = remainingCalories.toLocaleString();
+            document.getElementById('net-calories-val').innerText = netCalories.toLocaleString();
+
+            const statusMsg = document.getElementById('calorie-status-msg');
+            if (remainingCalories < 0) {
+                statusMsg.innerText = `${Math.abs(remainingCalories)} kcal over target`;
+                statusMsg.className = 'font-medium text-rose-500';
+            } else {
+                statusMsg.innerText = 'On Track';
+                statusMsg.className = 'font-medium text-emerald-600';
+            }
+
+            // Update Macronutrients UI
+            updateMacroProgress('protein', totalProtein, currentTargets.protein);
+            updateMacroProgress('carbs', totalCarbs, currentTargets.carbs);
+            updateMacroProgress('fats', totalFats, currentTargets.fats);
+
+            document.getElementById('protein-kcal').innerText = `${Math.round(totalProtein * 4)} kcal`;
+            document.getElementById('carbs-kcal').innerText = `${Math.round(totalCarbs * 4)} kcal`;
+            document.getElementById('fats-kcal').innerText = `${Math.round(totalFats * 9)} kcal`;
+
+            const totalEntries = log.foods.length + log.exercises.length;
+            document.getElementById('total-log-count-badge').innerText = `${totalEntries} item${totalEntries !== 1 ? 's' : ''}`;
+
+            // Chart update
+            updateCalorieChart(totalFoodKcal, currentTargets.calories);
+            updateWeeklyTrendsChart();
+            lucide.createIcons();
+        }
+
+        function createEntryRowHTML(item, type) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition group';
+            
+            if (type === 'food') {
+                const hasMacros = (item.protein || item.carbs || item.fats);
+                const macroStr = hasMacros 
+                    ? `P:${item.protein||0}g • C:${item.carbs||0}g • F:${item.fats||0}g` 
+                    : '';
+
+                div.innerHTML = `
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-slate-800">${escapeHtml(item.name)}</span>
+                        <span class="text-[11px] text-slate-400">${macroStr}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-bold text-slate-700">+${item.calories} <span class="text-xs font-normal text-slate-400">kcal</span></span>
+                        <button onclick="deleteEntry('${item.id}', 'food')" class="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition p-1" title="Delete entry">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                div.innerHTML = `
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-slate-800">${escapeHtml(item.name)}</span>
+                        <span class="text-[11px] text-amber-600 font-medium">${item.duration ? item.duration + ' mins duration' : 'Burned calories'}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-bold text-amber-600">-${item.calories} <span class="text-xs font-normal text-slate-400">kcal</span></span>
+                        <button onclick="deleteEntry('${item.id}', 'exercise')" class="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition p-1" title="Delete entry">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+            }
+            return div;
+        }
+
+        function deleteEntry(id, type) {
+            const log = getLogForDate(currentSelectedDate);
+            if (type === 'food') {
+                log.foods = log.foods.filter(f => f.id !== id);
+            } else {
+                log.exercises = log.exercises.filter(e => e.id !== id);
+            }
+            saveLogForDate(currentSelectedDate, log);
+            loadDailyLog(currentSelectedDate);
+            showToast('Entry removed');
+        }
+
+        function updateMacroProgress(macroName, currentVal, targetVal) {
+            const currentEl = document.getElementById(`${macroName}-current`);
+            const percentEl = document.getElementById(`${macroName}-percent`);
+            const barEl = document.getElementById(`${macroName}-progress-bar`);
+
+            currentEl.innerText = Math.round(currentVal);
+            const percent = targetVal > 0 ? Math.min(Math.round((currentVal / targetVal) * 100), 100) : 0;
+            percentEl.innerText = percent;
+            barEl.style.width = `${percent}%`;
+
+            // Turn macro bar rose if greatly exceeded target (> 120%)
+            if ((currentVal / targetVal) > 1.25) {
+                barEl.classList.remove('bg-indigo-500', 'bg-cyan-500', 'bg-rose-500');
+                barEl.classList.add('bg-rose-600');
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // --- CHARTS (CHART.JS) ---
+        function initCalorieChart() {
+            const ctx = document.getElementById('calorieDonutChart').getContext('2d');
+            calorieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [0, currentTargets.calories],
+                        backgroundColor: ['#10b981', '#f1f5f9'],
+                        borderWidth: 0,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    cutout: '80%',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: { enabled: false }
+                    }
+                }
+            });
+        }
+
+        function updateCalorieChart(intake, target) {
+            if (!calorieChart) return;
+            const remaining = Math.max(0, target - intake);
+            const consumed = Math.min(intake, target);
+            const overflow = intake > target;
+
+            calorieChart.data.datasets[0].data = [consumed, remaining];
+            calorieChart.data.datasets[0].backgroundColor = overflow 
+                ? ['#ef4444', '#f1f5f9'] 
+                : ['#10b981', '#f1f5f9'];
+            calorieChart.update();
+        }
+
+        function initWeeklyTrendsChart() {
+            const ctx = document.getElementById('weeklyTrendsChart').getContext('2d');
+            
+            // Build 7-day data sequence ending on selected date
+            const { labels, intakeData, goalData } = getPast7DaysData();
+
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Intake (kcal)',
+                            data: intakeData,
+                            backgroundColor: '#10b981',
+                            borderRadius: 6,
+                            barThickness: 20
+                        },
+                        {
+                            label: 'Target Goal',
+                            data: goalData,
+                            type: 'line',
+                            borderColor: '#94a3b8',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { family: 'Inter', size: 11 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 11 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function getPast7DaysData() {
+            const labels = [];
+            const intakeData = [];
+            const goalData = [];
+
+            const curr = new Date(currentSelectedDate);
+
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(curr);
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+
+                const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+                labels.push(dayLabel);
+
+                const log = getLogForDate(dateStr);
+                const dayFoodKcal = log.foods.reduce((acc, f) => acc + Number(f.calories || 0), 0);
+                
+                intakeData.push(dayFoodKcal);
+                goalData.push(currentTargets.calories);
+            }
+
+            return { labels, intakeData, goalData };
+        }
+
+        function updateWeeklyTrendsChart() {
+            if (!weeklyChart) return;
+            const { labels, intakeData, goalData } = getPast7DaysData();
+            weeklyChart.data.labels = labels;
+            weeklyChart.data.datasets[0].data = intakeData;
+            weeklyChart.data.datasets[1].data = goalData;
+            weeklyChart.update();
+        }
+
+        // --- EVENT HANDLERS ---
+        function setupEventListeners() {
+            // Date Picker change
+            // Date Picker change
+            const picker = document.getElementById('current-date-picker');
+            picker.addEventListener('change', (e) => {
+                currentSelectedDate = e.target.value;
+                updateDateBadge(currentSelectedDate);
+                loadDailyLog(currentSelectedDate);
+            });
+
+            document.getElementById('prev-date-btn').addEventListener('click', () => changeDateOffset(-1));
+            document.getElementById('next-date-btn').addEventListener('click', () => changeDateOffset(1));
+
+            // Export Data Backup to JSON file
+            document.getElementById('export-data-btn').addEventListener('click', () => {
+                const backupData = {
+                    targets: currentTargets,
+                    logs: {}
+                };
+
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith(APP_KEYS.LOGS_PREFIX)) {
+                        backupData.logs[key] = JSON.parse(localStorage.getItem(key));
+                    }
+                }
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `nutritrack_backup_${getTodayFormattedDate()}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                showToast('Backup file downloaded');
+            });
+
+            // Import Data Restore from JSON file
+            document.getElementById('import-file-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        if (imported.targets) {
+                            currentTargets = imported.targets;
+                            localStorage.setItem(APP_KEYS.TARGETS, JSON.stringify(currentTargets));
+                        }
+                        if (imported.logs) {
+                            Object.keys(imported.logs).forEach(key => {
+                                localStorage.setItem(key, JSON.stringify(imported.logs[key]));
+                            });
+                        }
+                        updateTargetsDisplay();
+                        loadDailyLog(currentSelectedDate);
+                        showToast('Data imported successfully');
+                    } catch (err) {
+                        alert('Invalid backup JSON file.');
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = ''; // Reset input
+            });
+
+            // Logging Tab Switcher
+            const tabFood = document.getElementById('tab-btn-food');
+            const tabExercise = document.getElementById('tab-btn-exercise');
+            const formFood = document.getElementById('food-log-form');
+            const formExercise = document.getElementById('exercise-log-form');
+
+            tabFood.addEventListener('click', () => {
+                tabFood.className = 'flex-1 pb-3 text-sm font-semibold text-emerald-600 border-b-2 border-emerald-600 flex items-center justify-center gap-2';
+                tabExercise.className = 'flex-1 pb-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-600 flex items-center justify-center gap-2';
+                formFood.classList.remove('hidden');
+                formExercise.classList.add('hidden');
+            });
+
+            tabExercise.addEventListener('click', () => {
+                tabExercise.className = 'flex-1 pb-3 text-sm font-semibold text-amber-600 border-b-2 border-amber-500 flex items-center justify-center gap-2';
+                tabFood.className = 'flex-1 pb-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-600 flex items-center justify-center gap-2';
+                formExercise.classList.remove('hidden');
+                formFood.classList.add('hidden');
+            });
+
+            // Food Log Submit
+            formFood.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('food-name').value.trim();
+                const calories = Number(document.getElementById('food-calories').value);
+                const category = document.getElementById('food-category').value;
+                const protein = Number(document.getElementById('food-protein').value || 0);
+                const carbs = Number(document.getElementById('food-carbs').value || 0);
+                const fats = Number(document.getElementById('food-fats').value || 0);
+
+                if (!name || calories < 0) return;
+
+                const log = getLogForDate(currentSelectedDate);
+                log.foods.push({
+                    id: Date.now().toString(),
+                    name,
+                    calories,
+                    category,
+                    protein,
+                    carbs,
+                    fats
+                });
+
+                saveLogForDate(currentSelectedDate, log);
+                loadDailyLog(currentSelectedDate);
+                formFood.reset();
+                showToast(`Logged "${name}" (${calories} kcal)`);
+            });
+
+            // Exercise Log Submit
+            formExercise.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('exercise-name').value.trim();
+                const calories = Number(document.getElementById('exercise-calories').value);
+                const duration = document.getElementById('exercise-duration').value;
+
+                if (!name || calories <= 0) return;
+
+                const log = getLogForDate(currentSelectedDate);
+                log.exercises.push({
+                    id: Date.now().toString(),
+                    name,
+                    calories,
+                    duration
+                });
+
+                saveLogForDate(currentSelectedDate, log);
+                loadDailyLog(currentSelectedDate);
+                formExercise.reset();
+                showToast(`Deducted ${calories} burned kcal`);
+            });
+
+            // Settings Modal Open/Close Controls
+            const modal = document.getElementById('settings-modal');
+            const modalCard = document.getElementById('settings-modal-card');
+            const openBtn = document.getElementById('open-settings-btn');
+            const quickMacroBtn = document.getElementById('quick-macro-edit');
+            const closeBtn = document.getElementById('close-settings-btn');
+            const cancelBtn = document.getElementById('cancel-settings-btn');
+            const settingsForm = document.getElementById('settings-form');
+
+            function openModal() {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    modalCard.classList.remove('scale-95');
+                }, 10);
+            }
+
+            function closeModal() {
+                modal.classList.add('opacity-0');
+                modalCard.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 200);
+            }
+
+            openBtn.addEventListener('click', openModal);
+            quickMacroBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            cancelBtn.addEventListener('click', closeModal);
+
+            settingsForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                currentTargets.calories = Number(document.getElementById('target-calories-input').value);
+                currentTargets.protein = Number(document.getElementById('target-protein-input').value);
+                currentTargets.carbs = Number(document.getElementById('target-carbs-input').value);
+                currentTargets.fats = Number(document.getElementById('target-fats-input').value);
+
+                saveTargets();
+                closeModal();
+                showToast('Targets updated!');
+            });
+
+            // Clear Day Log Button
+            document.getElementById('clear-day-btn').addEventListener('click', () => {
+                if (confirm(`Are you sure you want to clear all entries for ${currentSelectedDate}?`)) {
+                    saveLogForDate(currentSelectedDate, { foods: [], exercises: [] });
+                    loadDailyLog(currentSelectedDate);
+                    showToast('Daily log reset');
+                }
+            });
+        }
+
+        function changeDateOffset(offsetDays) {
+            const d = new Date(currentSelectedDate);
+            d.setDate(d.getDate() + offsetDays);
+            currentSelectedDate = d.toISOString().split('T')[0];
+            document.getElementById('current-date-picker').value = currentSelectedDate;
+            updateDateBadge(currentSelectedDate);
+            loadDailyLog(currentSelectedDate);
+        }
+
+        // Toast Feedback Notification Helper
+        function showToast(message) {
+            const toast = document.getElementById('toast-notification');
+            const msgEl = document.getElementById('toast-message');
+            msgEl.innerText = message;
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
